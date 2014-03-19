@@ -1,0 +1,47 @@
+{
+  "name": "node-python",
+  "version": "0.5.0",
+  "description": "Call python stuff from nodejs",
+  "main": "index.js",
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/monkeycz/node-python.git"
+  },
+  "bugs": {
+    "url": "https://github.com/monkeycz/node-python/issues"
+  },
+  "keywords": [
+    "python",
+    "bridge"
+  ],
+  "author": {
+    "name": "monkeycz",
+    "email": "monkeycz@hotmail.com",
+    "url": "https://github.com/monkeycz"
+  },
+  "contributors": [
+    {
+      "name": "Jean-Sébastien Tremblay",
+      "email": "jeansebtr@xpensia.com",
+      "url": "http://blog.jeansebtr.com"
+    },
+    {
+      "name": "Chris Dickinson",
+      "email": "chris@neversaw.us"
+    }
+  ],
+  "scripts": {
+    "test": "node test/linker.js",
+    "install": "node-gyp rebuild"
+  },
+  "license": "BSD",
+  "gypfile": true,
+  "readmeFilename": "README.md",
+  "dependencies": {
+    "bindings": "~1.1.1"
+  },
+  "readme": "# node-python binding\n\npython bridge for nodejs!\n\n\n## Usage\n\n```javascript\n\n// python stuff\nvar python = require('node-python');\nvar os = python.import('os');\n\n// nodejs stuff\nvar path = require('path');\n\nassert(os.path.basename(osgetcwd()) == path.basename(process.cwd()));\n\n```\n\n\n",
+  "homepage": "https://github.com/monkeycz/node-python",
+  "_id": "node-python@0.5.0",
+  "_from": "node-python@"
+}
