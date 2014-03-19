@@ -119,10 +119,10 @@ Handle<Value> PyObjectWrapper::New(PyObject* py_object)
         js_value = Local<Value>::New(Number::New(value));
     } else if (PyInt_CheckExact(py_object)) {
         long value = PyInt_AsLong(py_object);
-        js_value = Local<Value>::New(Integer::New(value));
+        js_value = Local<Value>::New(Integer::New((int32_t)value));
     } else if (PyLong_CheckExact(py_object)) {
         long value = PyLong_AsLong(py_object);
-        js_value = Local<Value>::New(Integer::New(value));
+        js_value = Local<Value>::New(Integer::New((int32_t)value));
     } else if (PyString_CheckExact(py_object)) {
         char* value = PyString_AsString(py_object);
         if (value != NULL)
@@ -292,7 +292,7 @@ Handle<Value> PyObjectWrapper::InstanceIndexedGetter(uint32_t index)
 
     PyObject* py_object = InstanceGetPyObject();
 
-    if (PySequence_Check(py_object) != 0 && index < PySequence_Size(py_object)) {
+    if (PySequence_Check(py_object) != 0 && index < (uint32_t)PySequence_Size(py_object)) {
         PyObject* py_item = PySequence_GetItem(py_object, index);
         return scope.Close(New(py_item));
     } else {
@@ -306,7 +306,7 @@ Handle<Value> PyObjectWrapper::InstanceIndexedSetter(uint32_t index, Local<Value
 
     PyObject* py_object = InstanceGetPyObject();
 
-    if (PySequence_Check(py_object) != 0 && index < PySequence_Size(py_object)) {
+    if (PySequence_Check(py_object) != 0 && index < (uint32_t)PySequence_Size(py_object)) {
         PyObject* py_value = ConvertToPython(js_value);
         PySequence_SetItem(py_object, index, py_value);
         Py_XDECREF(py_value);
