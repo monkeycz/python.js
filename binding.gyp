@@ -11,6 +11,7 @@
         ['OS=="mac"', {
             "xcode_settings": {
               "OTHER_CFLAGS": [
+                "-Wno-error=unused-command-line-argument-hard-error-in-future",
                 "<!(python-config --cflags)"
               ],
               "OTHER_LDFLAGS": [
