@@ -80,6 +80,10 @@ function test() {
 	js_test_14 = pytest.test_14.valueOf();
 	console.log('py_test_14: ', py_test_14, 'js_test_14: ', js_test_14);
 	console.log(py_test_14(8).toString(), js_test_14(8).toString());
+
+	console.log(pytest.test_15(function () {
+		return this.aaa;
+	}.bind(pytest.test_15.data)));
 }
 
 test();

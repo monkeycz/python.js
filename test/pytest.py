@@ -76,3 +76,7 @@ test_13 = {'aaa': 111, 'bbb': 222}
 
 def test_14(x):
 	return [x] * 3
+
+def test_15(js_func):
+	return js_func()
+test_15.data = {'aaa': 111, 'bbb': 222}
