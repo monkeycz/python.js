@@ -1,97 +1,159 @@
 
-#include <Python.h>
-#include <pyerrors.h>
-
 #include "utils.h"
 
-Handle<Value> ThrowPythonException(void)
+bool CatchPythonException(PyObject** py_exception_type, PyObject** py_exception_value, PyObject** py_exception_traceback)
+{
+    PyErr_Fetch(py_exception_type, py_exception_value, py_exception_traceback);
+    return *py_exception_type != NULL;
+}
+
+void ReleasePythonException(PyObject* py_exception_type, PyObject* py_exception_value, PyObject* py_exception_traceback)
+{
+    Py_XDECREF(py_exception_type);
+    Py_XDECREF(py_exception_value);
+    Py_XDECREF(py_exception_traceback);
+}
+
+Handle<Value> ConvertToJSException(PyObject* py_exception_type, PyObject* py_exception_value, PyObject* py_exception_traceback)
 {
     HandleScope scope;
 
-    PyObject* py_type = NULL;
-    PyObject* py_value = NULL;
-    PyObject* py_traceback = NULL;
-    PyErr_Fetch(&py_type, &py_value, &py_traceback);
-
-    if (py_type == NULL) {
-        return ThrowException(
-            Exception::Error(String::New("No exception found")));
-    }
+    if (py_exception_type == NULL)
+        return scope.Close(Exception::Error(String::New("No exception found")));
 
     Local<String> js_message;
-    if (py_value != NULL) {
-        if (PyObject_TypeCheck(py_value, &PyString_Type)) {
-            js_message = String::New(PyString_AsString(py_value));
-        } else if (PyObject_TypeCheck(py_value, &PyTuple_Type) && 
-            PyTuple_Size(py_value) > 0) {
-            js_message = String::New(PyString_AsString(PyTuple_GetItem(py_value, 0)));
+    if (py_exception_value != NULL) {
+        if (PyObject_TypeCheck(py_exception_value, &PyString_Type)) {
+            js_message = String::New(PyString_AsString(py_exception_value));
+        } else if (PyObject_TypeCheck(py_exception_value, &PyTuple_Type) && 
+            PyTuple_Size(py_exception_value) > 0) {
+            js_message = String::New(PyString_AsString(PyTuple_GetItem(py_exception_value, 0)));
         } else {
-            PyObject* py_value_string = PyObject_Str(py_value);
-            js_message = String::New(PyString_AsString(py_value_string));
-            Py_XDECREF(py_value_string);            
+            PyObject* py_exception_value_string = PyObject_Str(py_exception_value);
+            js_message = String::New(PyString_AsString(py_exception_value_string));
+            Py_XDECREF(py_exception_value_string);            
         }
     } else {
         js_message = String::New("Unknown exception");
     }
 
-    Local<Value> js_error;
-    if (PyErr_GivenExceptionMatches(py_type, PyExc_IndexError) != 0) {
-        js_error = Exception::RangeError(js_message);
-    } else if (PyErr_GivenExceptionMatches(py_type, PyExc_ReferenceError) != 0) {
-        js_error = Exception::ReferenceError(js_message);
-    } else if (PyErr_GivenExceptionMatches(py_type, PyExc_SyntaxError) != 0) {
-        js_error = Exception::SyntaxError(js_message);
-    } else if (PyErr_GivenExceptionMatches(py_type, PyExc_TypeError) != 0) {
-        js_error = Exception::TypeError(js_message);
+    Local<Value> js_exception;
+    if (PyErr_GivenExceptionMatches(py_exception_type, PyExc_IndexError) != 0) {
+        js_exception = Exception::RangeError(js_message);
+    } else if (PyErr_GivenExceptionMatches(py_exception_type, PyExc_ReferenceError) != 0) {
+        js_exception = Exception::ReferenceError(js_message);
+    } else if (PyErr_GivenExceptionMatches(py_exception_type, PyExc_SyntaxError) != 0) {
+        js_exception = Exception::SyntaxError(js_message);
+    } else if (PyErr_GivenExceptionMatches(py_exception_type, PyExc_TypeError) != 0) {
+        js_exception = Exception::TypeError(js_message);
     } else {
-        js_error = Exception::Error(js_message);
+        js_exception = Exception::Error(js_message);
     }
 
-    // PyObject* py_traceback_str = PyObject_Str(py_traceback);
-    // printf("%s\n", PyString_AsString(py_traceback_str));
-    // Py_XDECREF(py_traceback_str);
-
-    Py_XDECREF(py_type);
-    Py_XDECREF(py_value);
-    Py_XDECREF(py_traceback);
-
-    return ThrowException(js_error);
+    return scope.Close(js_exception);
 }
 
-void ThrowJSException(TryCatch& js_try_catch)
+Handle<Value> ConvertToJSException(PyObject* py_exception)
+{
+    HandleScope scope;
+    return scope.Close(ConvertToJSException(py_exception, py_exception, NULL));
+}
+
+Handle<Value> ThrowPythonException(void)
+{
+    HandleScope scope;
+
+    PyObject* py_exception_type = NULL;
+    PyObject* py_exception_value = NULL;
+    PyObject* py_exception_traceback = NULL;
+
+    if (!CatchPythonException(&py_exception_type, &py_exception_value, &py_exception_traceback))
+        return Null();
+
+    Handle<Value> js_exception = ConvertToJSException(py_exception_type, py_exception_value, py_exception_traceback);
+
+    // if (py_exception_traceback != NULL) {
+    //     PyObject* py_exception_traceback_string = PyObject_Str(py_exception_traceback);
+    //     printf("%s\n", PyString_AsString(py_exception_traceback_string));
+    //     Py_XDECREF(py_exception_traceback_string);
+    // }
+
+    ReleasePythonException(py_exception_type, py_exception_value, py_exception_traceback);
+
+    return ThrowException(js_exception);
+}
+
+Handle<Value> CatchJSException(TryCatch& js_try_catch)
 {
     HandleScope scope;
 
     if (!js_try_catch.HasCaught())
-        return;
+        return Handle<Value>();
 
     Local<Value> js_exception = js_try_catch.Exception();
+
+    return scope.Close(js_exception);
+}
+
+PyObject* ConvertToPythonException(Handle<Value> js_exception)
+{
+    HandleScope scope;
+
+    PyObject* py_exception_type = NULL;
+    Local<Value> js_message;
+
     if (js_exception->IsObject()) {
-        String::Utf8Value js_name_string(js_exception->ToObject()->Get(String::New("name")));
-        String::Utf8Value js_message_string(js_exception->ToObject()->Get(String::New("message")));
+        Local<Object> js_exception_object = js_exception->ToObject();
 
-        char* name = *js_name_string;
-        char* message = *js_message_string;
-        if (strcmp(name, "RangeError") == 0) {
-            PyErr_SetString(PyExc_IndexError, message);
-        } else if (strcmp(name, "ReferenceError") == 0) {
-            PyErr_SetString(PyExc_ReferenceError, message);
-        } else if (strcmp(name, "SyntaxError") == 0) {
-            PyErr_SetString(PyExc_SyntaxError, message);
-        } else if (strcmp(name, "TypeError") == 0) {
-            PyErr_SetString(PyExc_TypeError, message);
-        } else if (strcmp(name, "Error") == 0) {
-            PyErr_SetString(PyExc_Exception, message);
+        String::Utf8Value js_exception_name_string(js_exception_object->Get(String::New("name")));
+        char* exception_name = *js_exception_name_string;
+        if (strcmp(exception_name, "RangeError") == 0) {
+            py_exception_type = PyExc_IndexError;
+        } else if (strcmp(exception_name, "ReferenceError") == 0) {
+            py_exception_type = PyExc_ReferenceError;
+        } else if (strcmp(exception_name, "SyntaxError") == 0) {
+            py_exception_type = PyExc_SyntaxError;
+        } else if (strcmp(exception_name, "TypeError") == 0) {
+            py_exception_type = PyExc_TypeError;
+        } else if (strcmp(exception_name, "Error") == 0) {
+            py_exception_type = PyExc_Exception;
         } else {
-            PyErr_SetString(PyExc_Exception, message);
+            py_exception_type = PyExc_Exception;
         }
+        js_message = js_exception_object->Get(String::New("message"));
     } else {
-        String::Utf8Value js_exception_string(js_exception->ToString());
+        Local<String> js_exception_string = js_exception->ToString();
 
-        char* exception = *js_exception_string;
-        PyErr_SetString(PyExc_Exception, exception);
+        py_exception_type = PyExc_Exception;
+        js_message = js_exception_string;
     }
 
-    // String::Utf8Value js_trace_string(js_try_catch.StackTrace());
-    // printf("%s\n", *js_trace_string);
+    PyObject* py_args = PyTuple_New(1);
+    String::Utf8Value js_message_string(js_message);
+    PyObject* py_arg = PyString_FromString(*js_message_string);
+    PyTuple_SET_ITEM(py_args, 0, py_arg);
+
+    PyObject* py_exception = PyObject_CallObject(py_exception_type, py_args);
+
+    Py_XDECREF(py_args);
+
+    return py_exception;
+}
+
+PyObject* ThrowJSException(TryCatch& js_try_catch)
+{
+    HandleScope scope;
+
+    Handle<Value> js_exception = CatchJSException(js_try_catch);
+    if (js_exception.IsEmpty())
+        return NULL;
+
+    PyObject* py_exception = ConvertToPythonException(js_exception);
+    PyErr_SetObject(py_exception, py_exception);
+    Py_XDECREF(py_exception);
+
+    // String::Utf8Value js_exception_stacktrace_string(js_try_catch.StackTrace());
+    // printf("%s\n", *js_exception_stacktrace_string);
+
+    return NULL;
 }

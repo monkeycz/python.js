@@ -38,7 +38,7 @@ def test_08(value):
 		'eee': lambda x,y: x+y, 
 		'fff': [444, '555', 666], 
 		'ggg': {'hhh': 777, 888: 'iii', 'jjj': lambda x,y: x*y},
-		'kkk': __import__('os')
+		# 'kkk': __import__('os')
 	}
 
 def test_09(js_func):
@@ -54,7 +54,7 @@ def test_10(js_func):
 	try:
 		js_func()
 	except Exception as e:
-		print 'py_test -> ', e
+		print 'py_test -> ', e, type(e)
 		raise Exception('py_test_exception')
 
 class Test_11(object):
@@ -80,3 +80,22 @@ def test_14(x):
 def test_15(js_func):
 	return js_func()
 test_15.data = {'aaa': 111, 'bbb': 222}
+
+def test_16(make_error=True):
+	print 'test_16 in'
+	if make_error:
+		import time
+		time.sleep(2)
+	print 'test_16 out'
+	if make_error:
+		raise SyntaxError('async_exception')
+	return 'hello async'
+def async_cb(error, result):
+	print 'py async error: ', error, type(error)
+	print 'py async result: ', result
+test_16.async_cb = async_cb
+
+def test_17():
+	def aaa(): pass
+	def bbb(): pass
+	return [aaa, bbb]

@@ -5,8 +5,6 @@
 #include <node.h>
 #include <Python.h>
 
-#include "utils.h"
-
 using namespace v8;
 
 class PyObjectWrapper : public node::ObjectWrap
@@ -18,6 +16,17 @@ public:
     static void Initialize();
 
     static PyObject* ConvertToPython(const Handle<Value>& js_value);
+    static Handle<Value> ConvertToJS(PyObject* py_object);
+
+    static PyObject* PythonNamedGetter(PyObject* py_object, const char* key);
+    static void PythonNamedSetter(PyObject* py_object, const char* key, PyObject* py_value);
+    static PyObject* PythonIndexedGetter(PyObject* py_object, uint32_t index);
+    static void PythonIndexedSetter(PyObject* py_object, uint32_t index, PyObject* py_value);
+
+    static Handle<Value> NamedGetter(PyObject* py_object, const char* key);
+    static void NamedSetter(PyObject* py_object, const char* key, PyObject* py_value);
+    static Handle<Value> IndexedGetter(PyObject* py_object, uint32_t index);
+    static void IndexedSetter(PyObject* py_object, uint32_t index, PyObject* py_value);
 
     static Handle<Value> New(PyObject* py_object);
     static Handle<Value> New(const Arguments& js_args);
@@ -46,7 +55,6 @@ public:
 
     Handle<Value> InstanceCall(const Arguments& js_args);
     Handle<Value> InstanceValueOf(const Arguments& js_args);
-    Handle<Value> InstanceValueOf(PyObject* py_object);
     Handle<Value> InstanceToString(const Arguments& js_args);
 
 public:
@@ -59,6 +67,13 @@ private:
     static void py_method_dealloc_x(PyObject* py_object);
 
     static PyObject* py_method_function_x(PyObject* py_self, PyObject* py_args);
+
+    static uv_mutex_t uv_mutex;
+
+    static void uv_work_init(void);
+    static void uv_work_create(PyObject* py_object, PyObject* py_args);
+    static void uv_work_cb(uv_work_t* req);
+    static void uv_after_work_cb(uv_work_t* req, int status);
 
 private:
     PyObject* __py_object;

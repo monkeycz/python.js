@@ -32,6 +32,8 @@ void PyObjectWrapper::Initialize()
     py_function_template = Persistent<FunctionTemplate>::New(function_template);
 
     py_method_init_x();
+
+    uv_work_init();
 }
 
 PyObject* PyObjectWrapper::ConvertToPython(const Handle<Value>& js_value)
@@ -79,6 +81,8 @@ PyObject* PyObjectWrapper::ConvertToPython(const Handle<Value>& js_value)
         Py_TYPE(py_function) = &PyCFunction_Type_x;
 
         return py_function;
+    } else if (js_value->IsNativeError()) {
+        return ConvertToPythonException(js_value);
     } else if (js_value->IsObject()) {
         Local<Object> js_object = js_value->ToObject();
 
@@ -105,6 +109,131 @@ PyObject* PyObjectWrapper::ConvertToPython(const Handle<Value>& js_value)
     }
 
     Py_RETURN_NONE;
+}
+
+Handle<Value> PyObjectWrapper::ConvertToJS(PyObject* py_object)
+{
+    HandleScope scope;
+
+    if (PyCallable_Check(py_object) != 0) {
+        Py_XINCREF(py_object);
+        Local<FunctionTemplate> js_function_template = FunctionTemplate::New(Call, New(py_object));
+        Local<Function> js_function = js_function_template->GetFunction();
+        Handle<Value> js_function_name = NamedGetter(py_object, "func_name");
+        if (!js_function_name.IsEmpty())
+            js_function->SetName(js_function_name->ToString());
+        return scope.Close(js_function);
+    } else if (PyExceptionInstance_Check(py_object)) {
+        return scope.Close(ConvertToJSException(py_object));
+    } else if (PyMapping_Check(py_object) != 0) {
+        int length = (int)PyMapping_Length(py_object);
+        Local<Object> js_object = Object::New();
+        PyObject* py_keys = PyMapping_Keys(py_object);
+        PyObject* py_values = PyMapping_Values(py_object);
+        for(int i = 0; i < length; i++) {
+            PyObject* py_key = PySequence_GetItem(py_keys, i);
+            PyObject* py_value = PySequence_GetItem(py_values, i);
+            Handle<Value> js_key = ConvertToJS(py_key);
+            Handle<Value> js_value = ConvertToJS(py_value);
+            Py_XDECREF(py_key);
+            Py_XDECREF(py_value);
+            js_object->Set(js_key, js_value);
+        }
+        Py_XDECREF(py_keys);
+        Py_XDECREF(py_values);
+        return scope.Close(js_object);
+    } else if (PyList_Check(py_object) || PyTuple_Check(py_object)) {
+        int length = (int)PySequence_Length(py_object);
+        Local<Array> js_array = Array::New(length);
+        for(int i = 0; i < length; i++) {
+            PyObject* py_item = PySequence_GetItem(py_object, i);
+            Handle<Value> js_item = ConvertToJS(py_item);
+            Py_XDECREF(py_item);
+            js_array->Set(i, js_item);
+        }
+        return scope.Close(js_array);
+    } else {
+        Py_XINCREF(py_object);
+        Handle<Value> js_object = New(py_object);
+        return scope.Close(js_object);
+    }
+
+    return Undefined();
+}
+
+PyObject* PyObjectWrapper::PythonNamedGetter(PyObject* py_object, const char* key)
+{
+    PyObject* py_key = PyString_FromString(key);
+    PyObject* py_value = NULL;
+
+    if (PyMapping_HasKey(py_object, py_key) != 0)
+        py_value = PyObject_GetItem(py_object, py_key);
+    else if (PyObject_HasAttr(py_object, py_key) != 0)
+        py_value = PyObject_GetAttr(py_object, py_key);
+
+    Py_XDECREF(py_key);
+
+    return py_value;
+}
+
+void PyObjectWrapper::PythonNamedSetter(PyObject* py_object, const char* key, PyObject* py_value)
+{
+    PyObject* py_key = PyString_FromString(key);
+
+    if (PyMapping_Check(py_object) != 0)
+        PyObject_SetItem(py_object, py_key, py_value);
+    else
+        PyObject_SetAttr(py_object, py_key, py_value);
+
+    Py_XDECREF(py_key);
+}
+
+PyObject* PyObjectWrapper::PythonIndexedGetter(PyObject* py_object, uint32_t index)
+{
+    if (PySequence_Check(py_object) != 0 && index < (uint32_t)PySequence_Size(py_object)) {
+        return PySequence_GetItem(py_object, index);
+    } else {
+        return NULL;
+    }
+}
+
+void PyObjectWrapper::PythonIndexedSetter(PyObject* py_object, uint32_t index, PyObject* py_value)
+{
+    if (PySequence_Check(py_object) != 0 && index < (uint32_t)PySequence_Size(py_object)) {
+        PySequence_SetItem(py_object, index, py_value);
+    }
+}
+
+Handle<Value> PyObjectWrapper::NamedGetter(PyObject* py_object, const char* key)
+{
+    HandleScope scope;
+    PyObject* py_value = PythonNamedGetter(py_object, key);
+    if (py_value != NULL)
+        return scope.Close(New(py_value));
+    else
+        return Handle<Value>();
+}
+
+void PyObjectWrapper::NamedSetter(PyObject* py_object, const char* key, PyObject* py_value)
+{
+    HandleScope scope;
+    PythonNamedSetter(py_object, key, py_value);
+}
+
+Handle<Value> PyObjectWrapper::IndexedGetter(PyObject* py_object, uint32_t index)
+{
+    HandleScope scope;
+    PyObject* py_item = PythonIndexedGetter(py_object, index);
+    if (py_item != NULL)
+        return scope.Close(New(py_item));
+    else
+        return Handle<Value>();
+}
+
+void PyObjectWrapper::IndexedSetter(PyObject* py_object, uint32_t index, PyObject* py_value)
+{
+    HandleScope scope;
+    PythonIndexedSetter(py_object, index, py_value);
 }
 
 Handle<Value> PyObjectWrapper::New(PyObject* py_object)
@@ -247,71 +376,36 @@ PyObject* PyObjectWrapper::InstanceGetPyObject()
 Handle<Value> PyObjectWrapper::InstanceNamedGetter(Local<String> js_key)
 {
     HandleScope scope;
-
     PyObject* py_object = InstanceGetPyObject();
-
-    PyObject* py_key = ConvertToPython(js_key);
-    PyObject* py_value = NULL;
-
-    if (PyMapping_HasKey(py_object, py_key) != 0)
-        py_value = PyObject_GetItem(py_object, py_key);
-    else if (PyObject_HasAttr(py_object, py_key) != 0)
-        py_value = PyObject_GetAttr(py_object, py_key);
-
-    Py_XDECREF(py_key);
-
-    if (py_value != NULL)
-        return scope.Close(New(py_value));
-    else
-        return Handle<Value>();
+    String::Utf8Value key(js_key);
+    return scope.Close(NamedGetter(py_object, *key));
 }
 
 Handle<Value> PyObjectWrapper::InstanceNamedSetter(Local<String> js_key, Local<Value> js_value)
 {
     HandleScope scope;
-
     PyObject* py_object = InstanceGetPyObject();
-
-    PyObject* py_key = ConvertToPython(js_key);
+    String::Utf8Value key(js_key);
     PyObject* py_value = ConvertToPython(js_value);
-
-    if (PyMapping_Check(py_object) != 0)
-        PyObject_SetItem(py_object, py_key, py_value);
-    else
-        PyObject_SetAttr(py_object, py_key, py_value);
-
-    Py_XDECREF(py_key);    
+    NamedSetter(py_object, *key, py_value);
     Py_XDECREF(py_value);
-
     return scope.Close(js_value);
 }
 
 Handle<Value> PyObjectWrapper::InstanceIndexedGetter(uint32_t index)
 {
     HandleScope scope;
-
     PyObject* py_object = InstanceGetPyObject();
-
-    if (PySequence_Check(py_object) != 0 && index < (uint32_t)PySequence_Size(py_object)) {
-        PyObject* py_item = PySequence_GetItem(py_object, index);
-        return scope.Close(New(py_item));
-    } else {
-        return Handle<Value>();
-    }
+    return scope.Close(IndexedGetter(py_object, index));
 }
 
 Handle<Value> PyObjectWrapper::InstanceIndexedSetter(uint32_t index, Local<Value> js_value)
 {
     HandleScope scope;
-
     PyObject* py_object = InstanceGetPyObject();
-
-    if (PySequence_Check(py_object) != 0 && index < (uint32_t)PySequence_Size(py_object)) {
-        PyObject* py_value = ConvertToPython(js_value);
-        PySequence_SetItem(py_object, index, py_value);
-        Py_XDECREF(py_value);
-    }
-
+    PyObject* py_value = ConvertToPython(js_value);
+    IndexedSetter(py_object, index, py_value);
+    Py_XDECREF(py_value);
     return scope.Close(js_value);
 }
 
@@ -322,7 +416,7 @@ Handle<Array> PyObjectWrapper::InstanceEnumerator()
     PyObject* py_object = InstanceGetPyObject();
 
     PyObject* py_dir = PyObject_Dir(py_object);
-    Local<Array> js_dir = Array::Cast(*InstanceValueOf(py_dir));
+    Local<Array> js_dir = Array::Cast(*ConvertToJS(py_dir));
     Py_XDECREF(py_dir);
 
     return scope.Close(js_dir);
@@ -341,6 +435,13 @@ Handle<Value> PyObjectWrapper::InstanceCall(const Arguments& js_args)
         PyTuple_SET_ITEM(py_args, i, py_arg);
     }
 
+    Handle<Value> js_async = NamedGetter(py_object, "async");
+    if (!js_async.IsEmpty() && js_async->ToBoolean()->Value()) {
+        uv_work_create(py_object, py_args);
+        Py_XDECREF(py_args);
+        return Undefined();
+    }
+
     PyObject* py_result = PyObject_CallObject(py_object, py_args);
 
     Py_XDECREF(py_args);
@@ -351,59 +452,11 @@ Handle<Value> PyObjectWrapper::InstanceCall(const Arguments& js_args)
         return ThrowPythonException();
 }
 
-Handle<Value> PyObjectWrapper::InstanceValueOf(PyObject* py_object)
-{
-    HandleScope scope;
-
-    if (PyCallable_Check(py_object) != 0) {
-        Py_XINCREF(py_object);
-        Local<FunctionTemplate> js_function_template = FunctionTemplate::New(Call, New(py_object));
-        Local<Function> js_function = js_function_template->GetFunction();
-        Handle<Value> js_function_name = InstanceNamedGetter(String::New("func_name"));
-        if (!js_function_name.IsEmpty())
-            js_function->SetName(js_function_name->ToString());
-        return scope.Close(js_function);
-    } else if (PyMapping_Check(py_object) != 0) {
-        int length = (int)PyMapping_Length(py_object);
-        Local<Object> js_object = Object::New();
-        PyObject* py_keys = PyMapping_Keys(py_object);
-        PyObject* py_values = PyMapping_Values(py_object);
-        for(int i = 0; i < length; i++) {
-            PyObject* py_key = PySequence_GetItem(py_keys, i);
-            PyObject* py_value = PySequence_GetItem(py_values, i);
-            Handle<Value> js_key = InstanceValueOf(py_key);
-            Handle<Value> js_value = InstanceValueOf(py_value);
-            Py_XDECREF(py_key);
-            Py_XDECREF(py_value);
-            js_object->Set(js_key, js_value);
-        }
-        Py_XDECREF(py_keys);
-        Py_XDECREF(py_values);
-        return scope.Close(js_object);
-    } else if (PyList_Check(py_object) || PyTuple_Check(py_object)) {
-        int length = (int)PySequence_Length(py_object);
-        Local<Array> js_array = Array::New(length);
-        for(int i = 0; i < length; i++) {
-            PyObject* py_item = PySequence_GetItem(py_object, i);
-            Handle<Value> js_item = InstanceValueOf(py_item);
-            Py_XDECREF(py_item);
-            js_array->Set(i, js_item);
-        }
-        return scope.Close(js_array);
-    } else {
-        Py_XINCREF(py_object);
-        Handle<Value> js_object = New(py_object);
-        return scope.Close(js_object);
-    }
-
-    return Undefined();
-}
-
 Handle<Value> PyObjectWrapper::InstanceValueOf(const Arguments& js_args)
 {
     HandleScope scope;
     PyObject* py_object = InstanceGetPyObject();
-    return scope.Close(InstanceValueOf(py_object));
+    return scope.Close(ConvertToJS(py_object));
 }
 
 Handle<Value> PyObjectWrapper::InstanceToString(const Arguments& js_args)
@@ -435,6 +488,8 @@ void PyObjectWrapper::py_method_init_x(void)
 
 void PyObjectWrapper::py_method_dealloc_x(PyObject* py_object)
 {
+    HandleScope scope;
+
     PyCFunctionObject* py_function_object = (PyCFunctionObject*)py_object;
 
     PyMethodDef* py_method = py_function_object->m_ml;
@@ -467,11 +522,114 @@ PyObject* PyObjectWrapper::py_method_function_x(PyObject* py_self, PyObject* py_
 
     delete[] js_argv;
 
-    PyObject* py_result = NULL;
     if (!js_result.IsEmpty())
-        py_result = ConvertToPython(js_result);
+        return ConvertToPython(js_result);
     else
-        ThrowJSException(js_try_catch);
+        return ThrowJSException(js_try_catch);
+}
 
-    return py_result;
+typedef struct uv_work_data {
+    PyObject* py_object;
+    PyObject* py_args;
+    PyObject* py_result;
+
+    bool has_caught_exception;
+    PyObject* py_exception_type;
+    PyObject* py_exception_value;
+    PyObject* py_exception_traceback;
+
+    PyObject* py_async_cb;
+} uv_work_data_t;
+
+uv_mutex_t PyObjectWrapper::uv_mutex;
+
+void PyObjectWrapper::uv_work_init(void)
+{
+    uv_mutex_init(&uv_mutex);
+}
+
+void PyObjectWrapper::uv_work_create(PyObject* py_object, PyObject* py_args)
+{
+    uv_work_data_t* data = (uv_work_data_t*)malloc(sizeof(uv_work_data_t));
+    Py_XINCREF(py_object);
+    data->py_object = py_object;
+    Py_XINCREF(py_args);
+    data->py_args = py_args;
+    data->py_result = NULL;
+    data->has_caught_exception = false;
+    data->py_exception_type = NULL;
+    data->py_exception_value = NULL;
+    data->py_exception_traceback = NULL;
+    data->py_async_cb = PythonNamedGetter(py_object, "async_cb");
+
+    uv_work_t* req = (uv_work_t*)malloc(sizeof(uv_work_t));
+    req->data = data;
+
+    uv_queue_work(uv_default_loop(), req, uv_work_cb, uv_after_work_cb);
+}
+
+void PyObjectWrapper::uv_work_cb(uv_work_t* req)
+{
+    uv_work_data_t* data = (uv_work_data_t*)req->data;
+
+    uv_mutex_lock(&uv_mutex);
+
+    data->py_result = PyObject_CallObject(data->py_object, data->py_args);
+
+    if (data->py_result == NULL) {
+        data->has_caught_exception = CatchPythonException(&data->py_exception_type, 
+            &data->py_exception_value, &data->py_exception_traceback);
+    }
+
+    uv_mutex_unlock(&uv_mutex);
+
+    Py_XDECREF(data->py_args);
+    Py_XDECREF(data->py_object);
+}
+
+void PyObjectWrapper::uv_after_work_cb(uv_work_t* req, int status)
+{
+    HandleScope scope;
+
+    assert(status == 0);
+
+    uv_work_data_t* data = (uv_work_data_t*)req->data;
+
+    uv_mutex_lock(&uv_mutex);
+
+    int js_argc = 2;
+    Handle<Value> js_argv[2];
+
+    if (data->py_result != NULL) {
+        js_argv[0] = Local<Value>::New(Null());
+        js_argv[1] = New(data->py_result);
+    } else {
+        Handle<Value> js_exception;
+        if (data->has_caught_exception) {
+            js_exception = ConvertToJSException(data->py_exception_type, 
+                data->py_exception_value, data->py_exception_traceback);
+            ReleasePythonException(data->py_exception_type, 
+                data->py_exception_value, data->py_exception_traceback);
+        } else {
+            js_exception = Null();
+        }
+
+        js_argv[0] = Local<Value>::New(js_exception);
+        js_argv[1] = Local<Value>::New(Null());
+    }
+
+    if (data->py_async_cb != NULL) {
+        Handle<Value> js_async_cb = ConvertToJS(data->py_async_cb);
+        Py_XDECREF(data->py_async_cb);
+
+        if (!js_async_cb.IsEmpty() && js_async_cb->IsFunction()) {
+            Function* js_async_cb_function = Function::Cast(*js_async_cb);
+            js_async_cb_function->Call(Context::GetCurrent()->Global(), js_argc, js_argv);
+        }
+    }
+
+    uv_mutex_unlock(&uv_mutex);
+
+    free(data);
+    free(req);
 }
