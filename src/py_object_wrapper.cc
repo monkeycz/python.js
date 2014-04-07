@@ -9,6 +9,8 @@ PyObjectWrapper::PyObjectWrapper(PyObject* py_object) :
 
 PyObjectWrapper::~PyObjectWrapper()
 {
+    PyThreadStateLock py_thread_lock;
+
     Py_XDECREF(__py_object);
     __py_object = NULL;
 }
@@ -32,12 +34,12 @@ void PyObjectWrapper::Initialize()
     py_function_template = Persistent<FunctionTemplate>::New(function_template);
 
     py_method_init_x();
-
-    uv_work_init();
 }
 
 PyObject* PyObjectWrapper::ConvertToPython(const Handle<Value>& js_value)
 {
+    PyThreadStateLock py_thread_lock;
+
     HandleScope scope;
 
     if (js_value->IsUndefined()) {
@@ -113,6 +115,8 @@ PyObject* PyObjectWrapper::ConvertToPython(const Handle<Value>& js_value)
 
 Handle<Value> PyObjectWrapper::ConvertToJS(PyObject* py_object)
 {
+    PyThreadStateLock py_thread_lock;
+
     HandleScope scope;
 
     if (PyCallable_Check(py_object) != 0) {
@@ -163,6 +167,8 @@ Handle<Value> PyObjectWrapper::ConvertToJS(PyObject* py_object)
 
 PyObject* PyObjectWrapper::PythonNamedGetter(PyObject* py_object, const char* key)
 {
+    PyThreadStateLock py_thread_lock;
+
     PyObject* py_key = PyString_FromString(key);
     PyObject* py_value = NULL;
 
@@ -178,6 +184,8 @@ PyObject* PyObjectWrapper::PythonNamedGetter(PyObject* py_object, const char* ke
 
 void PyObjectWrapper::PythonNamedSetter(PyObject* py_object, const char* key, PyObject* py_value)
 {
+    PyThreadStateLock py_thread_lock;
+
     PyObject* py_key = PyString_FromString(key);
 
     if (PyMapping_Check(py_object) != 0)
@@ -190,6 +198,8 @@ void PyObjectWrapper::PythonNamedSetter(PyObject* py_object, const char* key, Py
 
 PyObject* PyObjectWrapper::PythonIndexedGetter(PyObject* py_object, uint32_t index)
 {
+    PyThreadStateLock py_thread_lock;
+
     if (PySequence_Check(py_object) != 0 && index < (uint32_t)PySequence_Size(py_object)) {
         return PySequence_GetItem(py_object, index);
     } else {
@@ -199,6 +209,8 @@ PyObject* PyObjectWrapper::PythonIndexedGetter(PyObject* py_object, uint32_t ind
 
 void PyObjectWrapper::PythonIndexedSetter(PyObject* py_object, uint32_t index, PyObject* py_value)
 {
+    PyThreadStateLock py_thread_lock;
+
     if (PySequence_Check(py_object) != 0 && index < (uint32_t)PySequence_Size(py_object)) {
         PySequence_SetItem(py_object, index, py_value);
     }
@@ -238,6 +250,8 @@ void PyObjectWrapper::IndexedSetter(PyObject* py_object, uint32_t index, PyObjec
 
 Handle<Value> PyObjectWrapper::New(PyObject* py_object)
 {
+    PyThreadStateLock py_thread_lock;
+
     HandleScope scope;
 
     Local<Value> js_value;
@@ -383,12 +397,17 @@ Handle<Value> PyObjectWrapper::InstanceNamedGetter(Local<String> js_key)
 
 Handle<Value> PyObjectWrapper::InstanceNamedSetter(Local<String> js_key, Local<Value> js_value)
 {
+    PyThreadStateLock py_thread_lock;
+
     HandleScope scope;
+
     PyObject* py_object = InstanceGetPyObject();
+
     String::Utf8Value key(js_key);
     PyObject* py_value = ConvertToPython(js_value);
     NamedSetter(py_object, *key, py_value);
     Py_XDECREF(py_value);
+
     return scope.Close(js_value);
 }
 
@@ -401,16 +420,23 @@ Handle<Value> PyObjectWrapper::InstanceIndexedGetter(uint32_t index)
 
 Handle<Value> PyObjectWrapper::InstanceIndexedSetter(uint32_t index, Local<Value> js_value)
 {
+    PyThreadStateLock py_thread_lock;
+
     HandleScope scope;
+
     PyObject* py_object = InstanceGetPyObject();
+
     PyObject* py_value = ConvertToPython(js_value);
     IndexedSetter(py_object, index, py_value);
     Py_XDECREF(py_value);
+
     return scope.Close(js_value);
 }
 
 Handle<Array> PyObjectWrapper::InstanceEnumerator()
 {
+    PyThreadStateLock py_thread_lock;
+
     HandleScope scope;
 
     PyObject* py_object = InstanceGetPyObject();
@@ -424,6 +450,8 @@ Handle<Array> PyObjectWrapper::InstanceEnumerator()
 
 Handle<Value> PyObjectWrapper::InstanceCall(const Arguments& js_args)
 {
+    PyThreadStateLock py_thread_lock;
+
     HandleScope scope;
 
     PyObject* py_object = InstanceGetPyObject();
@@ -461,6 +489,8 @@ Handle<Value> PyObjectWrapper::InstanceValueOf(const Arguments& js_args)
 
 Handle<Value> PyObjectWrapper::InstanceToString(const Arguments& js_args)
 {
+    PyThreadStateLock py_thread_lock;
+
     HandleScope scope;
 
     PyObject* py_object = InstanceGetPyObject();
@@ -488,6 +518,8 @@ void PyObjectWrapper::py_method_init_x(void)
 
 void PyObjectWrapper::py_method_dealloc_x(PyObject* py_object)
 {
+    PyThreadStateLock py_thread_lock;
+
     HandleScope scope;
 
     PyCFunctionObject* py_function_object = (PyCFunctionObject*)py_object;
@@ -506,6 +538,8 @@ void PyObjectWrapper::py_method_dealloc_x(PyObject* py_object)
 
 PyObject* PyObjectWrapper::py_method_function_x(PyObject* py_self, PyObject* py_args)
 {
+    PyThreadStateLock py_thread_lock;
+
     HandleScope scope;
 
     int js_argc = (int)PySequence_Length(py_args);
@@ -541,15 +575,10 @@ typedef struct uv_work_data {
     PyObject* py_async_cb;
 } uv_work_data_t;
 
-uv_mutex_t PyObjectWrapper::uv_mutex;
-
-void PyObjectWrapper::uv_work_init(void)
-{
-    uv_mutex_init(&uv_mutex);
-}
-
 void PyObjectWrapper::uv_work_create(PyObject* py_object, PyObject* py_args)
 {
+    PyThreadStateLock py_thread_lock;
+
     uv_work_data_t* data = (uv_work_data_t*)malloc(sizeof(uv_work_data_t));
     Py_XINCREF(py_object);
     data->py_object = py_object;
@@ -570,9 +599,9 @@ void PyObjectWrapper::uv_work_create(PyObject* py_object, PyObject* py_args)
 
 void PyObjectWrapper::uv_work_cb(uv_work_t* req)
 {
-    uv_work_data_t* data = (uv_work_data_t*)req->data;
+    PyThreadStateLock py_thread_lock;
 
-    uv_mutex_lock(&uv_mutex);
+    uv_work_data_t* data = (uv_work_data_t*)req->data;
 
     data->py_result = PyObject_CallObject(data->py_object, data->py_args);
 
@@ -581,21 +610,19 @@ void PyObjectWrapper::uv_work_cb(uv_work_t* req)
             &data->py_exception_value, &data->py_exception_traceback);
     }
 
-    uv_mutex_unlock(&uv_mutex);
-
     Py_XDECREF(data->py_args);
     Py_XDECREF(data->py_object);
 }
 
 void PyObjectWrapper::uv_after_work_cb(uv_work_t* req, int status)
 {
+    PyThreadStateLock py_thread_lock;
+
     HandleScope scope;
 
     assert(status == 0);
 
     uv_work_data_t* data = (uv_work_data_t*)req->data;
-
-    uv_mutex_lock(&uv_mutex);
 
     int js_argc = 2;
     Handle<Value> js_argv[2];
@@ -627,8 +654,6 @@ void PyObjectWrapper::uv_after_work_cb(uv_work_t* req, int status)
             js_async_cb_function->Call(Context::GetCurrent()->Global(), js_argc, js_argv);
         }
     }
-
-    uv_mutex_unlock(&uv_mutex);
 
     free(data);
     free(req);

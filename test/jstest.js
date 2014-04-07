@@ -100,4 +100,5 @@ function test() {
 	console.log(pytest.test_17().valueOf());
 }
 
-test();
+for (var i = 0; i < 1; i++)
+	test();

@@ -10,6 +10,8 @@ using namespace node;
 
 Handle<Value> import(const Arguments& args)
 {
+    PyThreadStateLock py_thread_lock;
+
     HandleScope scope;
 
     if (args.Length() < 1 || !args[0]->IsString()) {
@@ -32,9 +34,11 @@ Handle<Value> import(const Arguments& args)
 
 void init(Handle<Object> exports)
 {
+    PyInit();
+    AtExit(PyExit, NULL);
+
     HandleScope scope;
 
-    Py_Initialize();
     PyObjectWrapper::Initialize();
 
     // module.exports.import

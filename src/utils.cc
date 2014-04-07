@@ -1,14 +1,31 @@
 
 #include "utils.h"
 
+void PyInit(void)
+{
+    Py_Initialize();
+    PyEval_InitThreads();
+    PyEval_ReleaseThread(PyThreadState_Get());
+}
+
+void PyExit(void* arg)
+{
+    PyGILState_Ensure();
+    Py_Finalize();
+}
+
 bool CatchPythonException(PyObject** py_exception_type, PyObject** py_exception_value, PyObject** py_exception_traceback)
 {
+    PyThreadStateLock py_thread_lock;
+
     PyErr_Fetch(py_exception_type, py_exception_value, py_exception_traceback);
     return *py_exception_type != NULL;
 }
 
 void ReleasePythonException(PyObject* py_exception_type, PyObject* py_exception_value, PyObject* py_exception_traceback)
 {
+    PyThreadStateLock py_thread_lock;
+
     Py_XDECREF(py_exception_type);
     Py_XDECREF(py_exception_value);
     Py_XDECREF(py_exception_traceback);
@@ -16,6 +33,8 @@ void ReleasePythonException(PyObject* py_exception_type, PyObject* py_exception_
 
 Handle<Value> ConvertToJSException(PyObject* py_exception_type, PyObject* py_exception_value, PyObject* py_exception_traceback)
 {
+    PyThreadStateLock py_thread_lock;
+
     HandleScope scope;
 
     if (py_exception_type == NULL)
@@ -61,6 +80,8 @@ Handle<Value> ConvertToJSException(PyObject* py_exception)
 
 Handle<Value> ThrowPythonException(void)
 {
+    PyThreadStateLock py_thread_lock;
+
     HandleScope scope;
 
     PyObject* py_exception_type = NULL;
@@ -97,6 +118,8 @@ Handle<Value> CatchJSException(TryCatch& js_try_catch)
 
 PyObject* ConvertToPythonException(Handle<Value> js_exception)
 {
+    PyThreadStateLock py_thread_lock;
+
     HandleScope scope;
 
     PyObject* py_exception_type = NULL;
@@ -142,6 +165,8 @@ PyObject* ConvertToPythonException(Handle<Value> js_exception)
 
 PyObject* ThrowJSException(TryCatch& js_try_catch)
 {
+    PyThreadStateLock py_thread_lock;
+
     HandleScope scope;
 
     Handle<Value> js_exception = CatchJSException(js_try_catch);
