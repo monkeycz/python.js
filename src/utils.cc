@@ -35,7 +35,7 @@ Handle<Value> ConvertToJSException(PyObject* py_exception_type, PyObject* py_exc
 {
     PyThreadStateLock py_thread_lock;
 
-    HandleScope scope;
+    HandleScope scope(Isolate::GetCurrent());
 
     if (py_exception_type == NULL)
         return scope.Close(Exception::Error(String::New("No exception found")));
@@ -74,7 +74,7 @@ Handle<Value> ConvertToJSException(PyObject* py_exception_type, PyObject* py_exc
 
 Handle<Value> ConvertToJSException(PyObject* py_exception)
 {
-    HandleScope scope;
+    HandleScope scope(Isolate::GetCurrent());
     return scope.Close(ConvertToJSException(py_exception, py_exception, NULL));
 }
 
@@ -82,7 +82,7 @@ Handle<Value> ThrowPythonException(void)
 {
     PyThreadStateLock py_thread_lock;
 
-    HandleScope scope;
+    HandleScope scope(Isolate::GetCurrent());
 
     PyObject* py_exception_type = NULL;
     PyObject* py_exception_value = NULL;
@@ -106,7 +106,7 @@ Handle<Value> ThrowPythonException(void)
 
 Handle<Value> CatchJSException(TryCatch& js_try_catch)
 {
-    HandleScope scope;
+    HandleScope scope(Isolate::GetCurrent());
 
     if (!js_try_catch.HasCaught())
         return Handle<Value>();
@@ -120,7 +120,7 @@ PyObject* ConvertToPythonException(Handle<Value> js_exception)
 {
     PyThreadStateLock py_thread_lock;
 
-    HandleScope scope;
+    HandleScope scope(Isolate::GetCurrent());
 
     PyObject* py_exception_type = NULL;
     Local<Value> js_message;
@@ -167,7 +167,7 @@ PyObject* ThrowJSException(TryCatch& js_try_catch)
 {
     PyThreadStateLock py_thread_lock;
 
-    HandleScope scope;
+    HandleScope scope(Isolate::GetCurrent());
 
     Handle<Value> js_exception = CatchJSException(js_try_catch);
     if (js_exception.IsEmpty())
