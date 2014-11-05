@@ -46,7 +46,7 @@ nw-gyp rebuild --target=x.y.z
 
 cd node-python\src
 cl /O2 /MT /LD -Febinding.node binding.cc py_object_wrapper.cc utils.cc <NODE_GYP_ROOT>\.node-gyp\<NODEJS_VERSION>\ia32\node.lib <PYTHON_ROOT>\Python27\libs\python27.lib /I<NODE_GYP_ROOT>\.node-gyp\<NODEJS_VERSION>\src /I<NODE_GYP_ROOT>\.node-gyp\<NODEJS_VERSION>\deps\uv\include /I<NODE_GYP_ROOT>\.node-gyp\<NODEJS_VERSION>\deps\v8\include /I<PYTHON_ROOT>\Python27\include
-copy binding.node <NODE_MODULES_ROOT>\python-loader\compiled\<NODEJS_VERSION>\win32\ia32
+copy binding.node <NODE_MODULES_ROOT>\node-python\compiled\<NODEJS_VERSION>\win32\ia32
 
 ```
 
@@ -55,7 +55,7 @@ copy binding.node <NODE_MODULES_ROOT>\python-loader\compiled\<NODEJS_VERSION>\wi
 
 cd node-python\src
 cl /O2 /MT /LD -Febinding.node binding.cc py_object_wrapper.cc utils.cc <NW_GYP_ROOT>\.nw-gyp\<NODE_WEBKIT_VERSION>\ia32\node.lib <PYTHON_ROOT>\Python27\libs\python27.lib /I<NW_GYP_ROOT>\.nw-gyp\<NODE_WEBKIT_VERSION>\src /I<NW_GYP_ROOT>\.nw-gyp\<NODE_WEBKIT_VERSION>\deps\uv\include /I<NW_GYP_ROOT>\.nw-gyp\<NODE_WEBKIT_VERSION>\deps\v8\include /I<PYTHON_ROOT>\Python27\include
-copy binding.node <NODE_MODULES_ROOT>\python-loader\compiled\<NODEJS_VERSION>\win32\ia32
+copy binding.node <NODE_MODULES_ROOT>\node-python\compiled\<NODEJS_VERSION>\win32\ia32
 
 ```
 
