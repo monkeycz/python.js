@@ -8,15 +8,16 @@
 using namespace v8;
 using namespace node;
 
-Handle<Value> import(const Arguments& args)
+void import(const FunctionCallbackInfo<Value>& args)
 {
     PyThreadStateLock py_thread_lock;
 
-    HandleScope scope;
+    HandleScope scope(args.GetIsolate());
 
     if (args.Length() < 1 || !args[0]->IsString()) {
-        return ThrowException(
-            Exception::Error(String::New("I don't know how to import that.")));
+        args.GetReturnValue().Set(ThrowException(
+            Exception::Error(String::New("I don't know how to import that."))));
+        return;
     }
 
     String::Utf8Value js_module_name_string(args[0]->ToString());
@@ -45,9 +46,9 @@ Handle<Value> import(const Arguments& args)
     Py_XDECREF(py_module_name);
 
     if (py_module != NULL)
-        return scope.Close(PyObjectWrapper::New(py_module));
+        args.GetReturnValue().Set(PyObjectWrapper::New(py_module));
     else
-        return ThrowPythonException();
+        args.GetReturnValue().Set(ThrowPythonException());
 }
 
 void init(Handle<Object> exports)
@@ -55,7 +56,7 @@ void init(Handle<Object> exports)
     PyInit();
     AtExit(PyExit, NULL);
 
-    HandleScope scope;
+    HandleScope scope(Isolate::GetCurrent());
 
     PyObjectWrapper::Initialize();
 

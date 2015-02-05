@@ -3,6 +3,7 @@
 #define PY_OBJECT_WRAPPER_H
 
 #include <node.h>
+#include <node_object_wrap.h>
 #include <Python.h>
 
 using namespace v8;
@@ -29,21 +30,21 @@ public:
     static void IndexedSetter(PyObject* py_object, uint32_t index, PyObject* py_value);
 
     static Handle<Value> New(PyObject* py_object);
-    static Handle<Value> New(const Arguments& js_args);
+    static void New(const FunctionCallbackInfo<Value>& js_args);
 
-    static Handle<Value> NamedGetter(Local<String> js_key, const AccessorInfo& js_info);
-    static Handle<Value> NamedSetter(Local<String> js_key, Local<Value> js_value, const AccessorInfo& js_info);
-    static Handle<Value> IndexedGetter(uint32_t index, const AccessorInfo& js_info);
-    static Handle<Value> IndexedSetter(uint32_t index, Local<Value> js_value, const AccessorInfo& js_info);
-    static Handle<Array> Enumerator(const AccessorInfo& js_info);
+    static void NamedGetter(Local<String> js_key, const PropertyCallbackInfo<Value>& js_info);
+    static void NamedSetter(Local<String> js_key, Local<Value> js_value, const PropertyCallbackInfo<Value>& js_info);
+    static void IndexedGetter(uint32_t index, const PropertyCallbackInfo<Value>& js_info);
+    static void IndexedSetter(uint32_t index, Local<Value> js_value, const PropertyCallbackInfo<Value>& js_info);
+    static void Enumerator(const PropertyCallbackInfo<Array>& js_info);
 
-    static Handle<Value> CallAccessor(Local<String> js_property, const AccessorInfo& js_info);
-    static Handle<Value> ValueOfAccessor(Local<String> js_property, const AccessorInfo& js_info);
-    static Handle<Value> ToStringAccessor(Local<String> js_property, const AccessorInfo& js_info);
+    static void CallAccessor(Local<String> js_property, const PropertyCallbackInfo<Value>& js_info);
+    static void ValueOfAccessor(Local<String> js_property, const PropertyCallbackInfo<Value>& js_info);
+    static void ToStringAccessor(Local<String> js_property, const PropertyCallbackInfo<Value>& js_info);
 
-    static Handle<Value> Call(const Arguments& js_args);
-    static Handle<Value> ValueOf(const Arguments& js_args);
-    static Handle<Value> ToString(const Arguments& js_args);
+    static void Call(const FunctionCallbackInfo<Value>& js_args);
+    static void ValueOf(const FunctionCallbackInfo<Value>& js_args);
+    static void ToString(const FunctionCallbackInfo<Value>& js_args);
 
     PyObject* InstanceGetPyObject();
 
@@ -53,9 +54,9 @@ public:
     Handle<Value> InstanceIndexedSetter(uint32_t index, Local<Value> js_value);
     Handle<Array> InstanceEnumerator();
 
-    Handle<Value> InstanceCall(const Arguments& js_args);
-    Handle<Value> InstanceValueOf(const Arguments& js_args);
-    Handle<Value> InstanceToString(const Arguments& js_args);
+    Handle<Value> InstanceCall(const FunctionCallbackInfo<Value>& js_args);
+    Handle<Value> InstanceValueOf(const FunctionCallbackInfo<Value>& js_args);
+    Handle<Value> InstanceToString(const FunctionCallbackInfo<Value>& js_args);
 
 public:
     static Persistent<FunctionTemplate> py_function_template;

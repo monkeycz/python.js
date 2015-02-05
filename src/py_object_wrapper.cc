@@ -17,7 +17,7 @@ PyObjectWrapper::~PyObjectWrapper()
 
 void PyObjectWrapper::Initialize()
 {
-    HandleScope scope;
+    HandleScope scope(Isolate::GetCurrent());
 
     Local<FunctionTemplate> function_template = FunctionTemplate::New();
 
@@ -31,7 +31,7 @@ void PyObjectWrapper::Initialize()
     Local<ObjectTemplate> prototype_template = function_template->PrototypeTemplate();
     prototype_template->SetAccessor(String::NewSymbol("toString"), ToStringAccessor);
 
-    py_function_template = Persistent<FunctionTemplate>::New(function_template);
+    py_function_template.Reset(Isolate::GetCurrent(), function_template);
 
     py_method_init_x();
 }
@@ -40,7 +40,7 @@ PyObject* PyObjectWrapper::ConvertToPython(const Handle<Value>& js_value)
 {
     PyThreadStateLock py_thread_lock;
 
-    HandleScope scope;
+    HandleScope scope(Isolate::GetCurrent());
 
     if (js_value->IsUndefined()) {
         Py_RETURN_NONE;
@@ -58,7 +58,7 @@ PyObject* PyObjectWrapper::ConvertToPython(const Handle<Value>& js_value)
         String::Utf8Value js_value_string(js_value->ToString());
         return PyString_FromString(*js_value_string);
     } else if (js_value->IsArray()) {
-        Local<Array> js_array = Array::Cast(*js_value);
+        Local<Array> js_array(Handle<Array>::Cast(js_value));
         int length = js_array->Length();
         PyObject* py_list = PyList_New(length);
         for (int i = 0; i < length; i++) {
@@ -67,8 +67,8 @@ PyObject* PyObjectWrapper::ConvertToPython(const Handle<Value>& js_value)
         }
         return py_list;
     } else if (js_value->IsFunction()) {
-        Local<Function> _js_function = Function::Cast(*js_value);
-        Persistent<Function> js_function = Persistent<Function>::New(_js_function);
+        Local<Function> _js_function(Handle<Function>::Cast(js_value));
+        Persistent<Function> js_function(Isolate::GetCurrent(), _js_function);
 
         PyMethodDef* py_method = (PyMethodDef*)malloc(sizeof(PyMethodDef));
         String::Utf8Value js_function_name_string(js_function->GetName()->ToString());
@@ -88,7 +88,7 @@ PyObject* PyObjectWrapper::ConvertToPython(const Handle<Value>& js_value)
     } else if (js_value->IsObject()) {
         Local<Object> js_object = js_value->ToObject();
 
-        if (!js_object->FindInstanceInPrototypeChain(py_function_template).IsEmpty()) {
+        if (!js_object->FindInstanceInPrototypeChain(Local<FunctionTemplate>::New(Isolate::GetCurrent(), py_function_template)).IsEmpty()) {
             PyObjectWrapper* py_object_wrapper = ObjectWrap::Unwrap<PyObjectWrapper>(js_object);
             PyObject* py_object = py_object_wrapper->InstanceGetPyObject();
             Py_XINCREF(py_object);
@@ -117,7 +117,7 @@ Handle<Value> PyObjectWrapper::ConvertToJS(PyObject* py_object)
 {
     PyThreadStateLock py_thread_lock;
 
-    HandleScope scope;
+    HandleScope scope(Isolate::GetCurrent());
 
     if (PyCallable_Check(py_object) != 0) {
         Py_XINCREF(py_object);
@@ -218,7 +218,7 @@ void PyObjectWrapper::PythonIndexedSetter(PyObject* py_object, uint32_t index, P
 
 Handle<Value> PyObjectWrapper::NamedGetter(PyObject* py_object, const char* key)
 {
-    HandleScope scope;
+    HandleScope scope(Isolate::GetCurrent());
     PyObject* py_value = PythonNamedGetter(py_object, key);
     if (py_value != NULL)
         return scope.Close(New(py_value));
@@ -228,13 +228,13 @@ Handle<Value> PyObjectWrapper::NamedGetter(PyObject* py_object, const char* key)
 
 void PyObjectWrapper::NamedSetter(PyObject* py_object, const char* key, PyObject* py_value)
 {
-    HandleScope scope;
+    HandleScope scope(Isolate::GetCurrent());
     PythonNamedSetter(py_object, key, py_value);
 }
 
 Handle<Value> PyObjectWrapper::IndexedGetter(PyObject* py_object, uint32_t index)
 {
-    HandleScope scope;
+    HandleScope scope(Isolate::GetCurrent());
     PyObject* py_item = PythonIndexedGetter(py_object, index);
     if (py_item != NULL)
         return scope.Close(New(py_item));
@@ -244,7 +244,7 @@ Handle<Value> PyObjectWrapper::IndexedGetter(PyObject* py_object, uint32_t index
 
 void PyObjectWrapper::IndexedSetter(PyObject* py_object, uint32_t index, PyObject* py_value)
 {
-    HandleScope scope;
+    HandleScope scope(Isolate::GetCurrent());
     PythonIndexedSetter(py_object, index, py_value);
 }
 
@@ -252,28 +252,28 @@ Handle<Value> PyObjectWrapper::New(PyObject* py_object)
 {
     PyThreadStateLock py_thread_lock;
 
-    HandleScope scope;
+    HandleScope scope(Isolate::GetCurrent());
 
     Local<Value> js_value;
     if (py_object == Py_None) {
-        js_value = Local<Value>::New(Null());
+        js_value = Local<Value>::New(Isolate::GetCurrent(), Null());
     } else if (PyFloat_CheckExact(py_object)) {
         double value = PyFloat_AsDouble(py_object);
-        js_value = Local<Value>::New(Number::New(value));
+        js_value = Local<Value>::New(Isolate::GetCurrent(), Number::New(value));
     } else if (PyInt_CheckExact(py_object)) {
         long value = PyInt_AsLong(py_object);
-        js_value = Local<Value>::New(Integer::New((int32_t)value));
+        js_value = Local<Value>::New(Isolate::GetCurrent(), Integer::New((int32_t)value));
     } else if (PyLong_CheckExact(py_object)) {
         long value = PyLong_AsLong(py_object);
-        js_value = Local<Value>::New(Integer::New((int32_t)value));
+        js_value = Local<Value>::New(Isolate::GetCurrent(), Integer::New((int32_t)value));
     } else if (PyString_CheckExact(py_object)) {
         char* value = PyString_AsString(py_object);
         if (value != NULL)
-            js_value = Local<Value>::New(String::New(value));
+            js_value = Local<Value>::New(Isolate::GetCurrent(), String::New(value));
     } else if (PyBool_Check(py_object)) {
         int value = PyObject_IsTrue(py_object);
         if (value != -1)
-            js_value = Local<Value>::New(Boolean::New(value));
+            js_value = Local<Value>::New(Isolate::GetCurrent(), Boolean::New(value));
     }
 
     if (PyErr_Occurred()) {
@@ -285,7 +285,7 @@ Handle<Value> PyObjectWrapper::New(PyObject* py_object)
         Local<Object> js_object = py_function_template->GetFunction()->NewInstance();
         PyObjectWrapper* py_object_wrapper = new PyObjectWrapper(py_object);
         py_object_wrapper->Wrap(js_object);
-        js_value = Local<Value>::New(js_object);
+        js_value = Local<Value>::New(Isolate::GetCurrent(), js_object);
     } else {
         Py_XDECREF(py_object);
     }
@@ -293,93 +293,93 @@ Handle<Value> PyObjectWrapper::New(PyObject* py_object)
     return scope.Close(js_value);
 }
 
-Handle<Value> PyObjectWrapper::NamedGetter(Local<String> js_key, const AccessorInfo& js_info)
+void PyObjectWrapper::NamedGetter(Local<String> js_key, const PropertyCallbackInfo<Value>& js_info)
 {
-    HandleScope scope;
+    HandleScope scope(js_info.GetIsolate());
     PyObjectWrapper* py_object_wrapper = ObjectWrap::Unwrap<PyObjectWrapper>(js_info.Holder());
     Handle<Value> js_result = py_object_wrapper->InstanceNamedGetter(js_key);
-    return scope.Close(js_result);
+    js_info.GetReturnValue().Set(js_result);
 }
 
-Handle<Value> PyObjectWrapper::NamedSetter(Local<String> js_key, Local<Value> js_value, const AccessorInfo& js_info)
+void PyObjectWrapper::NamedSetter(Local<String> js_key, Local<Value> js_value, const PropertyCallbackInfo<Value>& js_info)
 {
-    HandleScope scope;
+    HandleScope scope(js_info.GetIsolate());
     PyObjectWrapper* py_object_wrapper = ObjectWrap::Unwrap<PyObjectWrapper>(js_info.Holder());
     Handle<Value> js_result = py_object_wrapper->InstanceNamedSetter(js_key, js_value);
-    return scope.Close(js_result);
+    js_info.GetReturnValue().Set(js_result);
 }
 
-Handle<Array> PyObjectWrapper::Enumerator(const AccessorInfo& js_info)
+void PyObjectWrapper::Enumerator(const PropertyCallbackInfo<Array>& js_info)
 {
-    HandleScope scope;
+    HandleScope scope(js_info.GetIsolate());
     PyObjectWrapper* py_object_wrapper = ObjectWrap::Unwrap<PyObjectWrapper>(js_info.Holder());
     Handle<Array> js_result = py_object_wrapper->InstanceEnumerator();
-    return scope.Close(js_result);
+    js_info.GetReturnValue().Set(js_result);
 }
 
-Handle<Value> PyObjectWrapper::IndexedGetter(uint32_t index, const AccessorInfo& js_info)
+void PyObjectWrapper::IndexedGetter(uint32_t index, const PropertyCallbackInfo<Value>& js_info)
 {
-    HandleScope scope;
+    HandleScope scope(js_info.GetIsolate());
     PyObjectWrapper* py_object_wrapper = ObjectWrap::Unwrap<PyObjectWrapper>(js_info.Holder());
     Handle<Value> js_result = py_object_wrapper->InstanceIndexedGetter(index);
-    return scope.Close(js_result);
+    js_info.GetReturnValue().Set(js_result);
 }
 
-Handle<Value> PyObjectWrapper::IndexedSetter(uint32_t index, Local<Value> js_value, const AccessorInfo& js_info)
+void PyObjectWrapper::IndexedSetter(uint32_t index, Local<Value> js_value, const PropertyCallbackInfo<Value>& js_info)
 {
-    HandleScope scope;
+    HandleScope scope(js_info.GetIsolate());
     PyObjectWrapper* py_object_wrapper = ObjectWrap::Unwrap<PyObjectWrapper>(js_info.Holder());
     Handle<Value> js_result = py_object_wrapper->InstanceIndexedSetter(index, js_value);
-    return scope.Close(js_result);
+    js_info.GetReturnValue().Set(js_result);
 }
 
-Handle<Value> PyObjectWrapper::CallAccessor(Local<String> js_property, const AccessorInfo& js_info)
+void PyObjectWrapper::CallAccessor(Local<String> js_property, const PropertyCallbackInfo<Value>& js_info)
 {
-    HandleScope scope;
+    HandleScope scope(js_info.GetIsolate());
     Local<FunctionTemplate> js_function = FunctionTemplate::New(Call);
-    return scope.Close(js_function->GetFunction());
+    js_info.GetReturnValue().Set(js_function->GetFunction());
 }
 
-Handle<Value> PyObjectWrapper::ToStringAccessor(Local<String> js_property, const AccessorInfo& js_info)
+void PyObjectWrapper::ToStringAccessor(Local<String> js_property, const PropertyCallbackInfo<Value>& js_info)
 {
-    HandleScope scope;
+    HandleScope scope(js_info.GetIsolate());
     Local<FunctionTemplate> js_function = FunctionTemplate::New(ToString);
-    return scope.Close(js_function->GetFunction());
+    js_info.GetReturnValue().Set(js_function->GetFunction());
 }
 
-Handle<Value> PyObjectWrapper::ValueOfAccessor(Local<String> js_property, const AccessorInfo& js_info)
+void PyObjectWrapper::ValueOfAccessor(Local<String> js_property, const PropertyCallbackInfo<Value>& js_info)
 {
-    HandleScope scope;
+    HandleScope scope(js_info.GetIsolate());
     Local<FunctionTemplate> js_function = FunctionTemplate::New(ValueOf);
-    return scope.Close(js_function->GetFunction());
+    js_info.GetReturnValue().Set(js_function->GetFunction());
 }
 
-Handle<Value> PyObjectWrapper::Call(const Arguments& js_args)
+void PyObjectWrapper::Call(const FunctionCallbackInfo<Value>& js_args)
 {
-    HandleScope scope;
+    HandleScope scope(js_args.GetIsolate());
     PyObjectWrapper* py_object_wrapper = NULL;
     if (js_args.Data()->IsUndefined())
         py_object_wrapper = ObjectWrap::Unwrap<PyObjectWrapper>(js_args.This());
     else
         py_object_wrapper = ObjectWrap::Unwrap<PyObjectWrapper>(js_args.Data()->ToObject());
     Handle<Value> js_result = py_object_wrapper->InstanceCall(js_args);
-    return scope.Close(js_result);
+    js_args.GetReturnValue().Set(js_result);
 }
 
-Handle<Value> PyObjectWrapper::ToString(const Arguments& js_args)
+void PyObjectWrapper::ToString(const FunctionCallbackInfo<Value>& js_args)
 {
-    HandleScope scope;
+    HandleScope scope(js_args.GetIsolate());
     PyObjectWrapper* py_object_wrapper = ObjectWrap::Unwrap<PyObjectWrapper>(js_args.This());
     Handle<Value> js_string = py_object_wrapper->InstanceToString(js_args);
-    return scope.Close(js_string);
+    js_args.GetReturnValue().Set(js_string);
 }
 
-Handle<Value> PyObjectWrapper::ValueOf(const Arguments& js_args)
+void PyObjectWrapper::ValueOf(const FunctionCallbackInfo<Value>& js_args)
 {
-    HandleScope scope;
+    HandleScope scope(js_args.GetIsolate());
     PyObjectWrapper* py_object_wrapper = ObjectWrap::Unwrap<PyObjectWrapper>(js_args.This());
     Handle<Value> js_value = py_object_wrapper->InstanceValueOf(js_args);
-    return scope.Close(js_value);
+    js_args.GetReturnValue().Set(js_value);
 }
 
 PyObject* PyObjectWrapper::InstanceGetPyObject()
@@ -389,7 +389,7 @@ PyObject* PyObjectWrapper::InstanceGetPyObject()
 
 Handle<Value> PyObjectWrapper::InstanceNamedGetter(Local<String> js_key)
 {
-    HandleScope scope;
+    HandleScope scope(Isolate::GetCurrent());
     PyObject* py_object = InstanceGetPyObject();
     String::Utf8Value key(js_key);
     return scope.Close(NamedGetter(py_object, *key));
@@ -399,7 +399,7 @@ Handle<Value> PyObjectWrapper::InstanceNamedSetter(Local<String> js_key, Local<V
 {
     PyThreadStateLock py_thread_lock;
 
-    HandleScope scope;
+    HandleScope scope(Isolate::GetCurrent());
 
     PyObject* py_object = InstanceGetPyObject();
 
@@ -413,7 +413,7 @@ Handle<Value> PyObjectWrapper::InstanceNamedSetter(Local<String> js_key, Local<V
 
 Handle<Value> PyObjectWrapper::InstanceIndexedGetter(uint32_t index)
 {
-    HandleScope scope;
+    HandleScope scope(Isolate::GetCurrent());
     PyObject* py_object = InstanceGetPyObject();
     return scope.Close(IndexedGetter(py_object, index));
 }
@@ -422,7 +422,7 @@ Handle<Value> PyObjectWrapper::InstanceIndexedSetter(uint32_t index, Local<Value
 {
     PyThreadStateLock py_thread_lock;
 
-    HandleScope scope;
+    HandleScope scope(Isolate::GetCurrent());
 
     PyObject* py_object = InstanceGetPyObject();
 
@@ -437,22 +437,22 @@ Handle<Array> PyObjectWrapper::InstanceEnumerator()
 {
     PyThreadStateLock py_thread_lock;
 
-    HandleScope scope;
+    HandleScope scope(Isolate::GetCurrent());
 
     PyObject* py_object = InstanceGetPyObject();
 
     PyObject* py_dir = PyObject_Dir(py_object);
-    Local<Array> js_dir = Array::Cast(*ConvertToJS(py_dir));
+    Local<Array> js_dir(Handle<Array>::Cast(ConvertToJS(py_dir)));
     Py_XDECREF(py_dir);
 
     return scope.Close(js_dir);
 }
 
-Handle<Value> PyObjectWrapper::InstanceCall(const Arguments& js_args)
+Handle<Value> PyObjectWrapper::InstanceCall(const FunctionCallbackInfo<Value>& js_args)
 {
     PyThreadStateLock py_thread_lock;
 
-    HandleScope scope;
+    HandleScope scope(Isolate::GetCurrent());
 
     PyObject* py_object = InstanceGetPyObject();
 
@@ -480,18 +480,18 @@ Handle<Value> PyObjectWrapper::InstanceCall(const Arguments& js_args)
         return ThrowPythonException();
 }
 
-Handle<Value> PyObjectWrapper::InstanceValueOf(const Arguments& js_args)
+Handle<Value> PyObjectWrapper::InstanceValueOf(const FunctionCallbackInfo<Value>& js_args)
 {
-    HandleScope scope;
+    HandleScope scope(Isolate::GetCurrent());
     PyObject* py_object = InstanceGetPyObject();
     return scope.Close(ConvertToJS(py_object));
 }
 
-Handle<Value> PyObjectWrapper::InstanceToString(const Arguments& js_args)
+Handle<Value> PyObjectWrapper::InstanceToString(const FunctionCallbackInfo<Value>& js_args)
 {
     PyThreadStateLock py_thread_lock;
 
-    HandleScope scope;
+    HandleScope scope(Isolate::GetCurrent());
 
     PyObject* py_object = InstanceGetPyObject();
 
@@ -520,7 +520,7 @@ void PyObjectWrapper::py_method_dealloc_x(PyObject* py_object)
 {
     PyThreadStateLock py_thread_lock;
 
-    HandleScope scope;
+    HandleScope scope(Isolate::GetCurrent());
 
     PyCFunctionObject* py_function_object = (PyCFunctionObject*)py_object;
 
@@ -530,7 +530,7 @@ void PyObjectWrapper::py_method_dealloc_x(PyObject* py_object)
     free(py_method);
 
     PyObject* py_self = py_function_object->m_self;
-    Persistent<Function> js_function = (Function*)PyCObject_AsVoidPtr(py_self);
+    Persistent<Function> js_function((Function*)PyCObject_AsVoidPtr(py_self));
     js_function.Dispose();
 
     PyCFunction_Type.tp_dealloc(py_object);
@@ -540,7 +540,7 @@ PyObject* PyObjectWrapper::py_method_function_x(PyObject* py_self, PyObject* py_
 {
     PyThreadStateLock py_thread_lock;
 
-    HandleScope scope;
+    HandleScope scope(Isolate::GetCurrent());
 
     int js_argc = (int)PySequence_Length(py_args);
     Handle<Value>* js_argv = new Handle<Value>[js_argc];
@@ -549,7 +549,7 @@ PyObject* PyObjectWrapper::py_method_function_x(PyObject* py_self, PyObject* py_
         js_argv[i] = New(py_item);
     }
 
-    Persistent<Function> js_function = (Function*)PyCObject_AsVoidPtr(py_self);
+    Persistent<Function> js_function((Function*)PyCObject_AsVoidPtr(py_self));
 
     TryCatch js_try_catch;
     Local<Value> js_result = js_function->Call(Context::GetCurrent()->Global(), js_argc, js_argv);
@@ -618,7 +618,7 @@ void PyObjectWrapper::uv_after_work_cb(uv_work_t* req, int status)
 {
     PyThreadStateLock py_thread_lock;
 
-    HandleScope scope;
+    HandleScope scope(Isolate::GetCurrent());
 
     assert(status == 0);
 
@@ -628,7 +628,7 @@ void PyObjectWrapper::uv_after_work_cb(uv_work_t* req, int status)
     Handle<Value> js_argv[2];
 
     if (data->py_result != NULL) {
-        js_argv[0] = Local<Value>::New(Null());
+        js_argv[0] = Local<Value>::New(Isolate::GetCurrent(), Null());
         js_argv[1] = New(data->py_result);
     } else {
         Handle<Value> js_exception;
@@ -641,8 +641,8 @@ void PyObjectWrapper::uv_after_work_cb(uv_work_t* req, int status)
             js_exception = Null();
         }
 
-        js_argv[0] = Local<Value>::New(js_exception);
-        js_argv[1] = Local<Value>::New(Null());
+        js_argv[0] = Local<Value>::New(Isolate::GetCurrent(), js_exception);
+        js_argv[1] = Local<Value>::New(Isolate::GetCurrent(), Null());
     }
 
     if (data->py_async_cb != NULL) {
