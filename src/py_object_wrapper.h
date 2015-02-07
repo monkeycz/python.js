@@ -4,6 +4,7 @@
 
 #include <node.h>
 #include <node_object_wrap.h>
+#include <uv.h>
 #include <Python.h>
 
 using namespace v8;

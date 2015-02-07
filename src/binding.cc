@@ -15,8 +15,8 @@ void import(const FunctionCallbackInfo<Value>& args)
     HandleScope scope(args.GetIsolate());
 
     if (args.Length() < 1 || !args[0]->IsString()) {
-        args.GetReturnValue().Set(ThrowException(
-            Exception::Error(String::New("I don't know how to import that."))));
+        args.GetReturnValue().Set(args.GetIsolate()->ThrowException(
+            Exception::Error(String::NewFromUtf8(args.GetIsolate(), "I don't know how to import that."))));
         return;
     }
 
@@ -61,12 +61,14 @@ void init(Handle<Object> exports)
     PyObjectWrapper::Initialize();
 
     // module.exports.import
-    exports->Set(String::NewSymbol("import"),
-        FunctionTemplate::New(import)->GetFunction());
+    exports->Set(String::NewFromUtf8(Isolate::GetCurrent(), "import", String::kInternalizedString),
+        FunctionTemplate::New(Isolate::GetCurrent(), import)->GetFunction());
 
     // module.exports.PyObject
-    exports->Set(String::NewSymbol("PyObject"),
-        PyObjectWrapper::py_function_template->GetFunction());
+    Handle<FunctionTemplate> _py_function_template = 
+        Local<FunctionTemplate>::New(Isolate::GetCurrent(), PyObjectWrapper::py_function_template);
+    exports->Set(String::NewFromUtf8(Isolate::GetCurrent(), "PyObject", String::kInternalizedString),
+        _py_function_template->GetFunction());
 }
 
 NODE_MODULE(binding, init)

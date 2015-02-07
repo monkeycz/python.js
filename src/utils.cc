@@ -35,25 +35,25 @@ Handle<Value> ConvertToJSException(PyObject* py_exception_type, PyObject* py_exc
 {
     PyThreadStateLock py_thread_lock;
 
-    HandleScope scope(Isolate::GetCurrent());
+    EscapableHandleScope scope(Isolate::GetCurrent());
 
     if (py_exception_type == NULL)
-        return scope.Close(Exception::Error(String::New("No exception found")));
+        return scope.Escape(Exception::Error(String::NewFromUtf8(Isolate::GetCurrent(), "No exception found")));
 
     Local<String> js_message;
     if (py_exception_value != NULL) {
         if (PyObject_TypeCheck(py_exception_value, &PyString_Type)) {
-            js_message = String::New(PyString_AsString(py_exception_value));
+            js_message = String::NewFromUtf8(Isolate::GetCurrent(), PyString_AsString(py_exception_value));
         } else if (PyObject_TypeCheck(py_exception_value, &PyTuple_Type) && 
             PyTuple_Size(py_exception_value) > 0) {
-            js_message = String::New(PyString_AsString(PyTuple_GetItem(py_exception_value, 0)));
+            js_message = String::NewFromUtf8(Isolate::GetCurrent(), PyString_AsString(PyTuple_GetItem(py_exception_value, 0)));
         } else {
             PyObject* py_exception_value_string = PyObject_Str(py_exception_value);
-            js_message = String::New(PyString_AsString(py_exception_value_string));
+            js_message = String::NewFromUtf8(Isolate::GetCurrent(), PyString_AsString(py_exception_value_string));
             Py_XDECREF(py_exception_value_string);            
         }
     } else {
-        js_message = String::New("Unknown exception");
+        js_message = String::NewFromUtf8(Isolate::GetCurrent(), "Unknown exception");
     }
 
     Local<Value> js_exception;
@@ -69,13 +69,14 @@ Handle<Value> ConvertToJSException(PyObject* py_exception_type, PyObject* py_exc
         js_exception = Exception::Error(js_message);
     }
 
-    return scope.Close(js_exception);
+    return scope.Escape(js_exception);
 }
 
 Handle<Value> ConvertToJSException(PyObject* py_exception)
 {
-    HandleScope scope(Isolate::GetCurrent());
-    return scope.Close(ConvertToJSException(py_exception, py_exception, NULL));
+    EscapableHandleScope scope(Isolate::GetCurrent());
+    Local<Value> js_exception = ConvertToJSException(py_exception, py_exception, NULL);
+    return scope.Escape(js_exception);
 }
 
 Handle<Value> ThrowPythonException(void)
@@ -89,7 +90,7 @@ Handle<Value> ThrowPythonException(void)
     PyObject* py_exception_traceback = NULL;
 
     if (!CatchPythonException(&py_exception_type, &py_exception_value, &py_exception_traceback))
-        return Null();
+        return Null(Isolate::GetCurrent());
 
     Handle<Value> js_exception = ConvertToJSException(py_exception_type, py_exception_value, py_exception_traceback);
 
@@ -101,19 +102,19 @@ Handle<Value> ThrowPythonException(void)
 
     ReleasePythonException(py_exception_type, py_exception_value, py_exception_traceback);
 
-    return ThrowException(js_exception);
+    return Isolate::GetCurrent()->ThrowException(js_exception);
 }
 
 Handle<Value> CatchJSException(TryCatch& js_try_catch)
 {
-    HandleScope scope(Isolate::GetCurrent());
+    EscapableHandleScope scope(Isolate::GetCurrent());
 
     if (!js_try_catch.HasCaught())
         return Handle<Value>();
 
     Local<Value> js_exception = js_try_catch.Exception();
 
-    return scope.Close(js_exception);
+    return scope.Escape(js_exception);
 }
 
 PyObject* ConvertToPythonException(Handle<Value> js_exception)
@@ -128,7 +129,7 @@ PyObject* ConvertToPythonException(Handle<Value> js_exception)
     if (js_exception->IsObject()) {
         Local<Object> js_exception_object = js_exception->ToObject();
 
-        String::Utf8Value js_exception_name_string(js_exception_object->Get(String::New("name")));
+        String::Utf8Value js_exception_name_string(js_exception_object->Get(String::NewFromUtf8(Isolate::GetCurrent(), "name")));
         char* exception_name = *js_exception_name_string;
         if (strcmp(exception_name, "RangeError") == 0) {
             py_exception_type = PyExc_IndexError;
@@ -143,7 +144,7 @@ PyObject* ConvertToPythonException(Handle<Value> js_exception)
         } else {
             py_exception_type = PyExc_Exception;
         }
-        js_message = js_exception_object->Get(String::New("message"));
+        js_message = js_exception_object->Get(String::NewFromUtf8(Isolate::GetCurrent(), "message"));
     } else {
         Local<String> js_exception_string = js_exception->ToString();
 
