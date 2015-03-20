@@ -1,18 +1,19 @@
 {
-  "name": "node-python",
+  "name": "python.js",
   "version": "0.5.0",
-  "description": "Call python stuff from nodejs",
+  "description": "Call python code from node.js.",
   "main": "index.js",
   "repository": {
     "type": "git",
-    "url": "git://github.com/monkeycz/node-python.git"
+    "url": "git://github.com/monkeycz/python.js.git"
   },
   "bugs": {
-    "url": "https://github.com/monkeycz/node-python/issues"
+    "url": "https://github.com/monkeycz/python.js/issues"
   },
   "keywords": [
     "python",
-    "bridge"
+    "bridge", 
+    "async"
   ],
   "author": {
     "name": "monkeycz",
@@ -39,9 +40,5 @@
   "readmeFilename": "README.md",
   "dependencies": {
     "bindings": "~1.1.1"
-  },
-  "readme": "# node-python binding\n\npython bridge for nodejs!\n\n\n## Usage\n\n```javascript\n\n// python stuff\nvar python = require('node-python');\nvar os = python.import('os');\n\n// nodejs stuff\nvar path = require('path');\n\nassert(os.path.basename(osgetcwd()) == path.basename(process.cwd()));\n\n```\n\n\n",
-  "homepage": "https://github.com/monkeycz/node-python",
-  "_id": "node-python@0.5.0",
-  "_from": "node-python@"
+  }
 }
