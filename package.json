@@ -12,24 +12,13 @@
   },
   "keywords": [
     "python",
-    "bridge", 
+    "bridge",
     "async"
   ],
-  "author": {
-    "name": "monkeycz",
-    "email": "monkeycz@hotmail.com",
-    "url": "https://github.com/monkeycz"
-  },
+  "author": "monkeycz <monkeycz@hotmail.com> (https://github.com/monkeycz)",
   "contributors": [
-    {
-      "name": "Jean-Sébastien Tremblay",
-      "email": "jeansebtr@xpensia.com",
-      "url": "http://blog.jeansebtr.com"
-    },
-    {
-      "name": "Chris Dickinson",
-      "email": "chris@neversaw.us"
-    }
+    "Jean-Sébastien Tremblay <jeansebtr@xpensia.com> (http://blog.jeansebtr.com)",
+    "Chris Dickinson <chris@neversaw.us>"
   ],
   "scripts": {
     "test": "node test/jstest.js",
@@ -37,8 +26,12 @@
   },
   "license": "BSD",
   "gypfile": true,
-  "readmeFilename": "README.md",
   "dependencies": {
     "bindings": "~1.1.1"
-  }
+  },
+  "homepage": "https://github.com/monkeycz/python.js",
+  "directories": {
+    "test": "test"
+  },
+  "devDependencies": {}
 }
