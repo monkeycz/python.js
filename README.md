@@ -87,3 +87,9 @@ npm install <protocol>://<user>@<domain>/<projects>/python.js.git
 ```bash
 node test/jstest.js
 ```
+
+
+## Thanks
+
+* [Jean-Sébastien Tremblay](https://github.com/JeanSebTr/node-python)
+* [Chris Dickinson](https://github.com/chrisdickinson/node-python)
