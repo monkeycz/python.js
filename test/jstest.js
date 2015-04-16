@@ -3,7 +3,7 @@ var python;
 try {
 	python = require('../index.js');
 } catch (e) {
-	python = require('node-python');
+	python = require('python.js');
 }
 
 var sys = python.import('sys');
@@ -12,7 +12,7 @@ var os = python.import('os');
 if (typeof(__dirname) != 'undefined')
 	sys.path.append(__dirname);
 else
-	sys.path.append(os.path.join(os.getcwd(), 'node_modules/node-python/test'));
+	sys.path.append(os.path.join(os.getcwd(), 'node_modules/python.js/test'));
 
 var pytest = python.import('pytest');
 
